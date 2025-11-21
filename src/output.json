@@ -1,0 +1,72 @@
+[
+    {
+        "customer_id": "C001",
+        "name": "Alice Martin",
+        "total": 188.92,
+        "currency": "EUR",
+        "loyalty_points": 1
+    },
+    {
+        "customer_id": "C002",
+        "name": "Bob Durant",
+        "total": 1397.24,
+        "currency": "EUR",
+        "loyalty_points": 15
+    },
+    {
+        "customer_id": "C003",
+        "name": "Charlie Smith",
+        "total": 493.5,
+        "currency": "USD",
+        "loyalty_points": 4
+    },
+    {
+        "customer_id": "C004",
+        "name": "Diana Prince",
+        "total": 2491.31,
+        "currency": "EUR",
+        "loyalty_points": 23
+    },
+    {
+        "customer_id": "C005",
+        "name": "Eve Torres",
+        "total": 94.71,
+        "currency": "GBP",
+        "loyalty_points": 1
+    },
+    {
+        "customer_id": "C006",
+        "name": "Frank Castle",
+        "total": 193.86,
+        "currency": "EUR",
+        "loyalty_points": 1
+    },
+    {
+        "customer_id": "C007",
+        "name": "Grace Lee",
+        "total": 3356.4,
+        "currency": "EUR",
+        "loyalty_points": 29
+    },
+    {
+        "customer_id": "C008",
+        "name": "Henry Wong",
+        "total": 61.7,
+        "currency": "EUR",
+        "loyalty_points": 0
+    },
+    {
+        "customer_id": "C009",
+        "name": "Iris West",
+        "total": 355.93,
+        "currency": "EUR",
+        "loyalty_points": 3
+    },
+    {
+        "customer_id": "C010",
+        "name": "Jack Ryan",
+        "total": 516.49,
+        "currency": "USD",
+        "loyalty_points": 4
+    }
+]

@@ -1,5 +1,9 @@
 <?php
 
+namespace OrderReport;
+
+use PHPUnit\Util\Exception;
+
 class OrderConfig
 {
     public const TAX = 0.2;

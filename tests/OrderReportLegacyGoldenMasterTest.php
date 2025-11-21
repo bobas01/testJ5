@@ -50,10 +50,21 @@ class OrderReportLegacyGoldenMasterTest extends TestCase
 
     private function runRefactoredCode(): string
     {
-        if (file_exists($this->refactoredBasePath . '/OrderReport.php')) {
+        $refactoredFile = $this->refactoredBasePath . '/OrderReport.php';
+        if (!file_exists($refactoredFile)) {
             return $this->runLegacyScript();
         }
-        return $this->runLegacyScript();
+
+        require_once $refactoredFile;
+
+        ob_start();
+        $result = \OrderReport\run();
+        $output = ob_get_clean();
+        $fullOutput = $output . $result;
+        $fullOutput = str_replace("\r\n", "\n", $fullOutput);
+        $fullOutput = str_replace("\r", "\n", $fullOutput);
+
+        return $fullOutput;
     }
 
     public function testGoldenMasterRegression(): void
