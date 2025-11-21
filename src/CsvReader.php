@@ -2,6 +2,18 @@
 
 namespace OrderReport;
 
+require_once __DIR__ . '/Models/Customer.php';
+require_once __DIR__ . '/Models/Product.php';
+require_once __DIR__ . '/Models/Order.php';
+require_once __DIR__ . '/Models/ShippingZone.php';
+require_once __DIR__ . '/Models/Promotion.php';
+
+use OrderReport\Models\Customer;
+use OrderReport\Models\Product;
+use OrderReport\Models\Order;
+use OrderReport\Models\ShippingZone;
+use OrderReport\Models\Promotion;
+
 class CsvReader
 {
     public static function readCustomers(string $csvPath): array
@@ -14,13 +26,13 @@ class CsvReader
 
         $header = fgetcsv($custFile); // skip header
         while (($row = fgetcsv($custFile)) !== false) {
-            $customers[$row[0]] = [
-                'id' => $row[0],
-                'name' => $row[1],
-                'level' => $row[2] ?? 'BASIC',
-                'shipping_zone' => $row[3] ?? 'ZONE1',
-                'currency' => $row[4] ?? 'EUR'
-            ];
+            $customers[$row[0]] = new Customer(
+                id: $row[0],
+                name: $row[1],
+                level: $row[2] ?? 'BASIC',
+                shippingZone: $row[3] ?? 'ZONE1',
+                currency: $row[4] ?? 'EUR'
+            );
         }
         fclose($custFile);
 
@@ -37,14 +49,14 @@ class CsvReader
         $headers = fgetcsv($handle);
         while (($data = fgetcsv($handle)) !== false) {
             try {
-                $products[$data[0]] = [
-                    'id' => $data[0],
-                    'name' => $data[1],
-                    'category' => $data[2],
-                    'price' => floatval($data[3]),
-                    'weight' => floatval($data[4] ?? 1.0),
-                    'taxable' => ($data[5] ?? 'true') === 'true'
-                ];
+                $products[$data[0]] = new Product(
+                    id: $data[0],
+                    name: $data[1],
+                    category: $data[2],
+                    price: floatval($data[3]),
+                    weight: floatval($data[4] ?? 1.0),
+                    taxable: ($data[5] ?? 'true') === 'true'
+                );
             } catch (\Exception $e) {
                 continue;
             }
@@ -69,11 +81,11 @@ class CsvReader
                 continue;
             }
             $p = str_getcsv($line);
-            $shippingZones[$p[0]] = [
-                'zone' => $p[0],
-                'base' => floatval($p[1]),
-                'per_kg' => floatval($p[2] ?? 0.5)
-            ];
+            $shippingZones[$p[0]] = new ShippingZone(
+                zone: $p[0],
+                base: floatval($p[1]),
+                perKg: floatval($p[2] ?? 0.5)
+            );
         }
 
         return $shippingZones;
@@ -94,12 +106,12 @@ class CsvReader
         array_shift($promoLines); // header
         foreach ($promoLines as $line) {
             $p = str_getcsv($line);
-            $promotions[$p[0]] = [
-                'code' => $p[0],
-                'type' => $p[1],
-                'value' => $p[2],
-                'active' => ($p[3] ?? 'true') !== 'false'
-            ];
+            $promotions[$p[0]] = new Promotion(
+                code: $p[0],
+                type: $p[1],
+                value: $p[2],
+                active: ($p[3] ?? 'true') !== 'false'
+            );
         }
 
         return $promotions;
@@ -124,16 +136,16 @@ class CsvReader
                     continue;
                 }
 
-                $orders[] = [
-                    'id' => $parts[0],
-                    'customer_id' => $parts[1],
-                    'product_id' => $parts[2],
-                    'qty' => $qty,
-                    'unit_price' => $price,
-                    'date' => $parts[5] ?? '',
-                    'promo_code' => $parts[6] ?? '',
-                    'time' => $parts[7] ?? '12:00'
-                ];
+                $orders[] = new Order(
+                    id: $parts[0],
+                    customerId: $parts[1],
+                    productId: $parts[2],
+                    qty: $qty,
+                    unitPrice: $price,
+                    date: $parts[5] ?? '',
+                    promoCode: $parts[6] ?? '',
+                    time: $parts[7] ?? '12:00'
+                );
             } catch (\Exception $e) {
                 continue;
             }

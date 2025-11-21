@@ -2,4 +2,5 @@
 /.phpunit.cache/
 /composer.lock
 /legacy/output.json
+/src/output.json
 

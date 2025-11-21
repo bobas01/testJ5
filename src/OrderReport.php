@@ -34,45 +34,45 @@ function run()
     // Calcul points de fidélité (première duplication)
     $loyaltyPoints = [];
     foreach ($orders as $o) {
-        $cid = $o['customer_id'];
+        $cid = $o->customerId;
         if (!isset($loyaltyPoints[$cid])) {
             $loyaltyPoints[$cid] = 0;
         }
         // Calcul basé sur prix commande
-        $loyaltyPoints[$cid] += $o['qty'] * $o['unit_price'] * OrderConfig::LOYALTY_RATIO;
+        $loyaltyPoints[$cid] += $o->qty * $o->unitPrice * OrderConfig::LOYALTY_RATIO;
     }
 
     // Groupement par client (logique métier mélangée)
     $totalsByCustomer = [];
     foreach ($orders as $o) {
-        $cid = $o['customer_id'];
+        $cid = $o->customerId;
 
         // Récupération produit avec fallback
-        $prod = $products[$o['product_id']] ?? [];
-        $basePrice = $prod['price'] ?? $o['unit_price'];
+        $prod = $products[$o->productId] ?? null;
+        $basePrice = $prod?->price ?? $o->unitPrice;
 
         // Application promo (logique complexe et bugguée)
-        $promoCode = $o['promo_code'];
+        $promoCode = $o->promoCode;
         $discountRate = 0;
         $fixedDiscount = 0;
 
         if (!empty($promoCode) && isset($promotions[$promoCode])) {
             $promo = $promotions[$promoCode];
-            if ($promo['active']) {
-                if ($promo['type'] === 'PERCENTAGE') {
-                    $discountRate = floatval($promo['value']) / 100;
-                } elseif ($promo['type'] === 'FIXED') {
+            if ($promo->active) {
+                if ($promo->type === 'PERCENTAGE') {
+                    $discountRate = floatval($promo->value) / 100;
+                } elseif ($promo->type === 'FIXED') {
                     // Bug: appliqué par ligne au lieu de global
-                    $fixedDiscount = floatval($promo['value']);
+                    $fixedDiscount = floatval($promo->value);
                 }
             }
         }
 
         // Calcul ligne avec réduction promo
-        $lineTotal = $o['qty'] * $basePrice * (1 - $discountRate) - $fixedDiscount * $o['qty'];
+        $lineTotal = $o->qty * $basePrice * (1 - $discountRate) - $fixedDiscount * $o->qty;
 
         // Bonus matin (règle cachée basée sur heure)
-        $hour = intval(explode(':', $o['time'])[0]);
+        $hour = intval(explode(':', $o->time)[0]);
         $morningBonus = 0;
         if ($hour < 10) {
             $morningBonus = $lineTotal * 0.03; // 3% réduction supplémentaire
@@ -90,7 +90,7 @@ function run()
         }
 
         $totalsByCustomer[$cid]['subtotal'] += $lineTotal;
-        $totalsByCustomer[$cid]['weight'] += ($prod['weight'] ?? 1.0) * $o['qty'];
+        $totalsByCustomer[$cid]['weight'] += ($prod?->weight ?? 1.0) * $o->qty;
         $totalsByCustomer[$cid]['items'][] = $o;
         $totalsByCustomer[$cid]['morningBonus'] += $morningBonus;
     }
@@ -106,11 +106,11 @@ function run()
     sort($sortedCustomerIds);
 
     foreach ($sortedCustomerIds as $cid) {
-        $cust = $customers[$cid] ?? [];
-        $name = $cust['name'] ?? 'Unknown';
-        $level = $cust['level'] ?? 'BASIC';
-        $zone = $cust['shipping_zone'] ?? 'ZONE1';
-        $currency = $cust['currency'] ?? 'EUR';
+        $cust = $customers[$cid] ?? null;
+        $name = $cust?->name ?? 'Unknown';
+        $level = $cust?->level ?? 'BASIC';
+        $zone = $cust?->shippingZone ?? 'ZONE1';
+        $currency = $cust?->currency ?? 'EUR';
 
         $sub = $totalsByCustomer[$cid]['subtotal'];
 
@@ -130,7 +130,7 @@ function run()
         }
 
         // Bonus weekend (règle cachée basée sur date)
-        $firstOrderDate = $totalsByCustomer[$cid]['items'][0]['date'] ?? '';
+        $firstOrderDate = $totalsByCustomer[$cid]['items'][0]->date ?? '';
         $dayOfWeek = 0;
         if (!empty($firstOrderDate)) {
             $timestamp = strtotime($firstOrderDate);
@@ -169,8 +169,8 @@ function run()
         // Vérifier si tous produits taxables
         $allTaxable = true;
         foreach ($totalsByCustomer[$cid]['items'] as $item) {
-            $prod = $products[$item['product_id']] ?? null;
-            if ($prod && isset($prod['taxable']) && $prod['taxable'] === false) {
+            $prod = $products[$item->productId] ?? null;
+            if ($prod && $prod->taxable === false) {
                 $allTaxable = false;
                 break;
             }
@@ -181,9 +181,9 @@ function run()
         } else {
             // Calcul taxe par ligne (plus complexe)
             foreach ($totalsByCustomer[$cid]['items'] as $item) {
-                $prod = $products[$item['product_id']] ?? null;
-                if ($prod && ($prod['taxable'] ?? true) !== false) {
-                    $itemTotal = $item['qty'] * ($prod['price'] ?? $item['unit_price']);
+                $prod = $products[$item->productId] ?? null;
+                if ($prod && $prod->taxable !== false) {
+                    $itemTotal = $item->qty * ($prod->price ?? $item->unitPrice);
                     $tax += $itemTotal * OrderConfig::TAX;
                 }
             }
@@ -195,11 +195,11 @@ function run()
         $weight = $totalsByCustomer[$cid]['weight'];
 
         if ($sub < OrderConfig::SHIPPING_LIMIT) {
-            $shipZone = $shippingZones[$zone] ?? ['base' => 5.0, 'per_kg' => 0.5];
-            $baseShip = $shipZone['base'];
+            $shipZone = $shippingZones[$zone] ?? new \OrderReport\Models\ShippingZone(zone: $zone, base: 5.0, perKg: 0.5);
+            $baseShip = $shipZone->base;
 
             if ($weight > 10) {
-                $ship = $baseShip + ($weight - 10) * $shipZone['per_kg'];
+                $ship = $baseShip + ($weight - 10) * $shipZone->perKg;
             } elseif ($weight > 5) {
                 // Palier intermédiaire (règle cachée)
                 $ship = $baseShip + ($weight - 5) * 0.3;
