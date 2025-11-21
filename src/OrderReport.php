@@ -2,7 +2,7 @@
 
 namespace OrderReport;
 
-use PHPUnit\Util\Exception;
+require_once __DIR__ . '/CsvReader.php';
 
 class OrderConfig
 {
@@ -25,105 +25,11 @@ function run()
     $shipPath = $base . '/data/shipping_zones.csv';
     $promoPath = $base . '/data/promotions.csv';
 
-    // Lecture customers (parsing mélangé avec logique)
-    $customers = [];
-    $custFile = fopen($custPath, 'r');
-    $header = fgetcsv($custFile); // skip header
-    while (($row = fgetcsv($custFile)) !== false) {
-        $customers[$row[0]] = [
-            'id' => $row[0],
-            'name' => $row[1],
-            'level' => $row[2] ?? 'BASIC',
-            'shipping_zone' => $row[3] ?? 'ZONE1',
-            'currency' => $row[4] ?? 'EUR'
-        ];
-    }
-    fclose($custFile);
-
-    // Lecture products (duplication du parsing, méthode différente)
-    $products = [];
-    if (($handle = fopen($prodPath, 'r')) !== false) {
-        $headers = fgetcsv($handle);
-        while (($data = fgetcsv($handle)) !== false) {
-            try {
-                $products[$data[0]] = [
-                    'id' => $data[0],
-                    'name' => $data[1],
-                    'category' => $data[2],
-                    'price' => floatval($data[3]),
-                    'weight' => floatval($data[4] ?? 1.0),
-                    'taxable' => ($data[5] ?? 'true') === 'true'
-                ];
-            } catch (Exception $e) {
-                // Skip silencieux
-                continue;
-            }
-        }
-        fclose($handle);
-    }
-
-    // Lecture shipping zones (encore une autre variation)
-    $shippingZones = [];
-    $shipContent = file_get_contents($shipPath);
-    $shipLines = explode("\n", $shipContent);
-    array_shift($shipLines); // remove header
-    foreach ($shipLines as $line) {
-        if (trim($line) === '') continue;
-        $p = str_getcsv($line);
-        $shippingZones[$p[0]] = [
-            'zone' => $p[0],
-            'base' => floatval($p[1]),
-            'per_kg' => floatval($p[2] ?? 0.5)
-        ];
-    }
-
-    // Lecture promotions (parsing avec @ pour supprimer warnings)
-    $promotions = [];
-    if (file_exists($promoPath)) {
-        $promoLines = @file($promoPath, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
-        if ($promoLines !== false) {
-            array_shift($promoLines); // header
-            foreach ($promoLines as $line) {
-                $p = str_getcsv($line);
-                $promotions[$p[0]] = [
-                    'code' => $p[0],
-                    'type' => $p[1],
-                    'value' => $p[2],
-                    'active' => ($p[3] ?? 'true') !== 'false'
-                ];
-            }
-        }
-    }
-
-    // Lecture orders (mélange parsing et validation)
-    $orders = [];
-    $ordLines = file($ordPath, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
-    array_shift($ordLines); // remove header
-    foreach ($ordLines as $line) {
-        $parts = str_getcsv($line);
-        try {
-            $qty = intval($parts[3]);
-            $price = floatval($parts[4]);
-
-            if ($qty <= 0 || $price < 0) {
-                continue; // validation silencieuse
-            }
-
-            $orders[] = [
-                'id' => $parts[0],
-                'customer_id' => $parts[1],
-                'product_id' => $parts[2],
-                'qty' => $qty,
-                'unit_price' => $price,
-                'date' => $parts[5] ?? '',
-                'promo_code' => $parts[6] ?? '',
-                'time' => $parts[7] ?? '12:00'
-            ];
-        } catch (Exception $e) {
-            // Skip silencieux
-            continue;
-        }
-    }
+    $customers = CsvReader::readCustomers($custPath);
+    $products = CsvReader::readProducts($prodPath);
+    $shippingZones = CsvReader::readShippingZones($shipPath);
+    $promotions = CsvReader::readPromotions($promoPath);
+    $orders = CsvReader::readOrders($ordPath);
 
     // Calcul points de fidélité (première duplication)
     $loyaltyPoints = [];
