@@ -4,8 +4,14 @@ namespace OrderReport;
 
 require_once __DIR__ . '/CsvReader.php';
 require_once __DIR__ . '/Calculators/DiscountCalculator.php';
+require_once __DIR__ . '/Calculators/TaxCalculator.php';
+require_once __DIR__ . '/Calculators/ShippingCalculator.php';
+require_once __DIR__ . '/Calculators/CurrencyConverter.php';
 
 use OrderReport\Calculators\DiscountCalculator;
+use OrderReport\Calculators\TaxCalculator;
+use OrderReport\Calculators\ShippingCalculator;
+use OrderReport\Calculators\CurrencyConverter;
 
 class OrderConfig
 {
@@ -119,89 +125,30 @@ function run()
 
         $pts = $loyaltyPoints[$cid] ?? 0;
         $firstOrderDate = $totalsByCustomer[$cid]['items'][0]->date ?? '';
-        
+
         $volumeDiscount = DiscountCalculator::calculateVolumeDiscount($sub, $level);
         $volumeDiscount = DiscountCalculator::applyWeekendBonus($volumeDiscount, $firstOrderDate);
         $loyaltyDiscount = DiscountCalculator::calculateLoyaltyDiscount($pts);
-        
+
         $discounts = DiscountCalculator::applyMaxDiscountCap($volumeDiscount, $loyaltyDiscount);
         $disc = $discounts['volume'];
         $loyaltyDiscount = $discounts['loyalty'];
         $totalDiscount = $discounts['total'];
 
-        // Calcul taxe (gestion spéciale par produit)
         $taxable = $sub - $totalDiscount;
-        $tax = 0.0;
+        $tax = TaxCalculator::calculateTax(
+            $taxable,
+            $totalsByCustomer[$cid]['items'],
+            $products
+        );
 
-        // Vérifier si tous produits taxables
-        $allTaxable = true;
-        foreach ($totalsByCustomer[$cid]['items'] as $item) {
-            $prod = $products[$item->productId] ?? null;
-            if ($prod && $prod->taxable === false) {
-                $allTaxable = false;
-                break;
-            }
-        }
-
-        if ($allTaxable) {
-            $tax = round($taxable * OrderConfig::TAX, 2); // Arrondi 2 décimales
-        } else {
-            // Calcul taxe par ligne (plus complexe)
-            foreach ($totalsByCustomer[$cid]['items'] as $item) {
-                $prod = $products[$item->productId] ?? null;
-                if ($prod && $prod->taxable !== false) {
-                    $itemTotal = $item->qty * ($prod->price ?? $item->unitPrice);
-                    $tax += $itemTotal * OrderConfig::TAX;
-                }
-            }
-            $tax = round($tax, 2);
-        }
-
-        // Frais de port complexes (duplication)
-        $ship = 0.0;
         $weight = $totalsByCustomer[$cid]['weight'];
-
-        if ($sub < OrderConfig::SHIPPING_LIMIT) {
-            $shipZone = $shippingZones[$zone] ?? new \OrderReport\Models\ShippingZone(zone: $zone, base: 5.0, perKg: 0.5);
-            $baseShip = $shipZone->base;
-
-            if ($weight > 10) {
-                $ship = $baseShip + ($weight - 10) * $shipZone->perKg;
-            } elseif ($weight > 5) {
-                // Palier intermédiaire (règle cachée)
-                $ship = $baseShip + ($weight - 5) * 0.3;
-            } else {
-                $ship = $baseShip;
-            }
-
-            // Majoration zones éloignées
-            if ($zone === 'ZONE3' || $zone === 'ZONE4') {
-                $ship = $ship * 1.2;
-            }
-        } else {
-            // Livraison gratuite mais frais manutention poids élevé
-            if ($weight > 20) {
-                $ship = ($weight - 20) * 0.25;
-            }
-        }
-
-        // Frais de gestion (magic number + condition cachée)
-        $handling = 0.0;
+        $ship = ShippingCalculator::calculateShipping($sub, $weight, $zone, $shippingZones);
+        
         $itemCount = count($totalsByCustomer[$cid]['items']);
-        if ($itemCount > 10) {
-            $handling = OrderConfig::HANDLING_FEE;
-        }
-        if ($itemCount > 20) {
-            $handling = OrderConfig::HANDLING_FEE * 2; // double pour grosses commandes
-        }
-
-        // Conversion devise (règle cachée pour non-EUR)
-        $currencyRate = 1.0;
-        if ($currency === 'USD') {
-            $currencyRate = 1.1;
-        } elseif ($currency === 'GBP') {
-            $currencyRate = 0.85;
-        }
+        $handling = ShippingCalculator::calculateHandling($itemCount);
+        
+        $currencyRate = CurrencyConverter::getRate($currency);
 
         $total = round(($taxable + $tax + $ship + $handling) * $currencyRate, 2);
         $grandTotal += $total;
