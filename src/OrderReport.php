@@ -7,11 +7,15 @@ require_once __DIR__ . '/Calculators/DiscountCalculator.php';
 require_once __DIR__ . '/Calculators/TaxCalculator.php';
 require_once __DIR__ . '/Calculators/ShippingCalculator.php';
 require_once __DIR__ . '/Calculators/CurrencyConverter.php';
+require_once __DIR__ . '/Formatters/ReportFormatter.php';
+require_once __DIR__ . '/IO/ReportWriter.php';
 
 use OrderReport\Calculators\DiscountCalculator;
 use OrderReport\Calculators\TaxCalculator;
 use OrderReport\Calculators\ShippingCalculator;
 use OrderReport\Calculators\CurrencyConverter;
+use OrderReport\Formatters\ReportFormatter;
+use OrderReport\IO\ReportWriter;
 
 class OrderConfig
 {
@@ -104,13 +108,11 @@ function run()
         $totalsByCustomer[$cid]['morningBonus'] += $morningBonus;
     }
 
-    // Génération rapport (mélange calculs + formatage + I/O)
-    $outputLines = [];
+    $customerReports = [];
     $jsonData = [];
     $grandTotal = 0.0;
     $totalTaxCollected = 0.0;
 
-    // Tri par ID client (comportement à préserver)
     $sortedCustomerIds = array_keys($totalsByCustomer);
     sort($sortedCustomerIds);
 
@@ -144,36 +146,38 @@ function run()
 
         $weight = $totalsByCustomer[$cid]['weight'];
         $ship = ShippingCalculator::calculateShipping($sub, $weight, $zone, $shippingZones);
-        
+
         $itemCount = count($totalsByCustomer[$cid]['items']);
         $handling = ShippingCalculator::calculateHandling($itemCount);
-        
+
         $currencyRate = CurrencyConverter::getRate($currency);
 
         $total = round(($taxable + $tax + $ship + $handling) * $currencyRate, 2);
         $grandTotal += $total;
         $totalTaxCollected += $tax * $currencyRate;
 
-        // Formatage texte (dispersé, pas de fonction dédiée)
-        $outputLines[] = sprintf('Customer: %s (%s)', $name, $cid);
-        $outputLines[] = sprintf('Level: %s | Zone: %s | Currency: %s', $level, $zone, $currency);
-        $outputLines[] = sprintf('Subtotal: %.2f', $sub);
-        $outputLines[] = sprintf('Discount: %.2f', $totalDiscount);
-        $outputLines[] = sprintf('  - Volume discount: %.2f', $disc);
-        $outputLines[] = sprintf('  - Loyalty discount: %.2f', $loyaltyDiscount);
-        if ($totalsByCustomer[$cid]['morningBonus'] > 0) {
-            $outputLines[] = sprintf('  - Morning bonus: %.2f', $totalsByCustomer[$cid]['morningBonus']);
-        }
-        $outputLines[] = sprintf('Tax: %.2f', $tax * $currencyRate);
-        $outputLines[] = sprintf('Shipping (%s, %.1fkg): %.2f', $zone, $weight, $ship);
-        if ($handling > 0) {
-            $outputLines[] = sprintf('Handling (%d items): %.2f', $itemCount, $handling);
-        }
-        $outputLines[] = sprintf('Total: %.2f %s', $total, $currency);
-        $outputLines[] = sprintf('Loyalty Points: %d', floor($pts));
-        $outputLines[] = '';
+        $customerReports[] = ReportFormatter::formatCustomerReport(
+            $name,
+            $cid,
+            $level,
+            $zone,
+            $currency,
+            $sub,
+            $totalDiscount,
+            $disc,
+            $loyaltyDiscount,
+            $totalsByCustomer[$cid]['morningBonus'],
+            $tax,
+            $currencyRate,
+            $zone,
+            $weight,
+            $ship,
+            $handling,
+            $itemCount,
+            $total,
+            floor($pts)
+        );
 
-        // Export JSON en parallèle (side effect)
         $jsonData[] = [
             'customer_id' => $cid,
             'name' => $name,
@@ -183,17 +187,13 @@ function run()
         ];
     }
 
-    $outputLines[] = sprintf('Grand Total: %.2f EUR', $grandTotal);
-    $outputLines[] = sprintf('Total Tax Collected: %.2f EUR', $totalTaxCollected);
+    $summary = ReportFormatter::formatSummary($grandTotal, $totalTaxCollected);
+    $result = ReportFormatter::formatReport($customerReports, $summary);
 
-    $result = implode("\n", $outputLines);
+    ReportWriter::writeToConsole($result);
 
-    // Side effects: echo + file write
-    echo $result;
-
-    // Export JSON surprise
     $outputPath = $base . '/output.json';
-    file_put_contents($outputPath, json_encode($jsonData, JSON_PRETTY_PRINT));
+    ReportWriter::writeJsonToFile($outputPath, $jsonData);
 
     return $result;
 }
