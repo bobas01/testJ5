@@ -3,6 +3,9 @@
 namespace OrderReport;
 
 require_once __DIR__ . '/CsvReader.php';
+require_once __DIR__ . '/Calculators/DiscountCalculator.php';
+
+use OrderReport\Calculators\DiscountCalculator;
 
 class OrderConfig
 {
@@ -114,53 +117,17 @@ function run()
 
         $sub = $totalsByCustomer[$cid]['subtotal'];
 
-        // Remise par paliers (duplication + magic numbers)
-        $disc = 0.0;
-        if ($sub > 50) {
-            $disc = $sub * 0.05;
-        }
-        if ($sub > 100) {
-            $disc = $sub * 0.10; // écrase la précédente (bug intentionnel)
-        }
-        if ($sub > 500) {
-            $disc = $sub * 0.15;
-        }
-        if ($sub > 1000 && $level === 'PREMIUM') {
-            $disc = $sub * 0.20;
-        }
-
-        // Bonus weekend (règle cachée basée sur date)
-        $firstOrderDate = $totalsByCustomer[$cid]['items'][0]->date ?? '';
-        $dayOfWeek = 0;
-        if (!empty($firstOrderDate)) {
-            $timestamp = strtotime($firstOrderDate);
-            if ($timestamp !== false) {
-                $dayOfWeek = intval(date('w', $timestamp));
-            }
-        }
-        if ($dayOfWeek === 0 || $dayOfWeek === 6) {
-            $disc = $disc * 1.05; // 5% bonus sur remise
-        }
-
-        // Calcul remise fidélité (duplication)
-        $loyaltyDiscount = 0.0;
         $pts = $loyaltyPoints[$cid] ?? 0;
-        if ($pts > 100) {
-            $loyaltyDiscount = min($pts * 0.1, 50.0);
-        }
-        if ($pts > 500) {
-            $loyaltyDiscount = min($pts * 0.15, 100.0); // écrase précédent
-        }
-
-        // Plafond remise global (règle cachée)
-        $totalDiscount = $disc + $loyaltyDiscount;
-        if ($totalDiscount > OrderConfig::MAX_DISCOUNT) {
-            $totalDiscount = OrderConfig::MAX_DISCOUNT;
-            // Ajustement proportionnel (logique complexe)
-            $ratio = OrderConfig::MAX_DISCOUNT / ($disc + $loyaltyDiscount);
-            $disc = $disc * $ratio;
-            $loyaltyDiscount = $loyaltyDiscount * $ratio;
-        }
+        $firstOrderDate = $totalsByCustomer[$cid]['items'][0]->date ?? '';
+        
+        $volumeDiscount = DiscountCalculator::calculateVolumeDiscount($sub, $level);
+        $volumeDiscount = DiscountCalculator::applyWeekendBonus($volumeDiscount, $firstOrderDate);
+        $loyaltyDiscount = DiscountCalculator::calculateLoyaltyDiscount($pts);
+        
+        $discounts = DiscountCalculator::applyMaxDiscountCap($volumeDiscount, $loyaltyDiscount);
+        $disc = $discounts['volume'];
+        $loyaltyDiscount = $discounts['loyalty'];
+        $totalDiscount = $discounts['total'];
 
         // Calcul taxe (gestion spéciale par produit)
         $taxable = $sub - $totalDiscount;
