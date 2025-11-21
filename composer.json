@@ -1,0 +1,28 @@
+{
+    "name": "company/order-report-legacy",
+    "description": "Legacy order report system - Refactoring test",
+    "type": "project",
+    "require": {
+        "php": "^8.0"
+    },
+    "require-dev": {
+        "phpunit/phpunit": "^10.0"
+    },
+    "autoload": {
+        "files": [
+            "legacy/orderReportLegacy.php"
+        ]
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "Tests\\": "tests/"
+        }
+    },
+    "scripts": {
+        "test": "phpunit",
+        "legacy": "php legacy/orderReportLegacy.php"
+    },
+    "config": {
+        "sort-packages": true
+    }
+}
